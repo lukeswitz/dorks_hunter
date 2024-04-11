@@ -10,26 +10,21 @@ def parseArgs():
     message = "Simple Google dork search"
     parser = argparse.ArgumentParser(description=message)
     parser.add_argument('--domain', '-d', required=True, help='Domain to scan')
-    parser.add_argument('--results', '-r', help='Number of results per search, default 10', type=int)
+    parser.add_argument('--results', '-r', help='Number of results per search, default 10', type=int, default=10)
     parser.add_argument('--output', '-o', help='Output file')
-    parser.parse_args()
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 def save(file, data):
-    with open(file, "a") as f:
-        f.write(str(data))
-        f.write("\n")
+    if file:
+        with open(file, "a") as f:
+            f.write(str(data) + "\n")
 
 def main():
     inputs = parseArgs()
-    amount = inputs.results if inputs.results else 10
-    requ = 0
     domain = inputs.domain
-    target = tldextract.extract(str(domain)).domain
+    target = tldextract.extract(domain).domain
+    ua = UserAgent(cache=False)  # Each search uses a new user agent to mimic different browsers
 
-    # Initialize the UserAgent object
-    ua = UserAgent()
 
     dorks = {
     "# .git folders (https://www.google.com/search?q=inurl%3A%22%2F.git%22"+domain+"+-github)": "inurl:\"/.git\" "+domain+" -github",
@@ -62,26 +57,20 @@ def main():
 
     for description, dork in dorks.items():
         print("\n" + description + "\n")
-        if inputs.output:
-            save(inputs.output, description)
-        try:
-            for results in search(dork, lang="en", user_agent=ua.random):
-                print(results)
+        save(inputs.output, description)
+        attempts = 0
 
-                # Randomize sleep time
-                time.sleep(random.uniform(1, 15))  # Sleep for a random time between 1 and 5 seconds
-
-                requ += 1
-                if inputs.output:
-                    save(inputs.output, results)
-
-                # Randomize sleep time again
-                time.sleep(random.uniform(1, 15))  # Sleep for a random time between 1 and 5 seconds
-
-                if requ >= amount:
-                    break
-        except Exception as e:
-            print(e)
+        while attempts < 5:  # Retry up to 5 times
+            try:
+                for result in search(dork, lang="en", num=inputs.results, user_agent=ua.random, stop=inputs.results):
+                    print(result)
+                    save(inputs.output, result)
+                    time.sleep(random.uniform(3, 10))  # Mimic human behavior with variable delays
+                break  # Exit the loop on success
+            except Exception as e:
+                print(f"Error: {e}. Retrying...")
+                attempts += 1
+                time.sleep(random.uniform(10, 30))  # Shorter, randomized wait before retrying
 
 if __name__ == '__main__':
     main()
